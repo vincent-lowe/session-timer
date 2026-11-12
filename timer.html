@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Session Timer</title>
+
+<!-- Google Fonts: Poppins approximates Salesforce Sans. Loads only when online;
+     falls back to system fonts offline. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    /* Salesforce brand palette */
+    --sf-blue:        #0176D3;  /* primary brand blue */
+    --sf-cloud-blue:  #00A1E0;  /* classic cloud blue */
+    --sf-navy:        #032D60;  /* deep brand navy */
+    --sf-navy-2:      #012B4D;
+    --sf-sky:         #AACBFF;  /* light accent */
+    --sf-sky-soft:    #D8EDFF;
+    --sf-cloud:       #EAF5FE;  /* near-white cloud */
+    --sf-green:       #2E844A;  /* trailhead green */
+    --sf-orange:      #FE9339;  /* warm accent */
+    --sf-red:         #EA001E;  /* salesforce red */
+
+    --bg-top:    #0B3D73;
+    --bg-bottom: #032D60;
+
+    --text:  #FFFFFF;
+    --muted: #AACBFF;
+    --ring-track: rgba(255,255,255,0.14);
+
+    --font: "Poppins", "Salesforce Sans", -apple-system, BlinkMacSystemFont,
+            "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    font-family: var(--font);
+    color: var(--text);
+    overflow: hidden;
+  }
+
+  body {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2.5vh;
+    padding: 4vh 2vw;
+    background:
+      radial-gradient(1200px 700px at 50% -10%, #0B5CA6 0%, rgba(11,92,166,0) 60%),
+      linear-gradient(160deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+    transition: background 0.6s ease;
+  }
+  body.state-warn   { background: linear-gradient(160deg, #6a4a12 0%, #3a2606 100%); }
+  body.state-danger { background: linear-gradient(160deg, #6e1119 0%, #3a060b 100%); }
+
+  /* ======================================================================
+     BACKGROUND SCENE — clouds + Cody (blue bear) & Astro (backpacker)
+     All original inline SVG, fully offline.
+     ====================================================================== */
+  .scene {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .scene svg { display: block; }
+
+  .cloud {
+    position: absolute;
+    opacity: 0.9;
+    filter: drop-shadow(0 10px 24px rgba(0,0,0,0.18));
+  }
+  .cloud.c1 { top: 12%;  left: 6%;   width: 180px; animation: drift1 26s ease-in-out infinite; }
+  .cloud.c2 { top: 26%;  right: 9%;  width: 230px; animation: drift2 32s ease-in-out infinite; }
+  .cloud.c3 { bottom: 20%; left: 14%; width: 150px; opacity:0.7; animation: drift1 30s ease-in-out infinite reverse; }
+  .cloud.c4 { top: 60%;  right: 16%; width: 120px; opacity:0.65; animation: drift2 24s ease-in-out infinite reverse; }
+
+  @keyframes drift1 { 0%,100%{ transform: translateX(0) } 50%{ transform: translateX(24px) } }
+  @keyframes drift2 { 0%,100%{ transform: translateX(0) } 50%{ transform: translateX(-28px) } }
+
+  /* Characters sit high on the sides, flanking the dial — above the controls */
+  .mascot { position: absolute; top: 12vh; }
+  .mascot.cody  { left: 1.5vw;  width: clamp(130px, 17vw, 270px); animation: bobCody 4.5s ease-in-out infinite; transform-origin: bottom center; }
+  .mascot.astro { right: 1.5vw; width: clamp(130px, 17vw, 270px); animation: bobAstro 5.2s ease-in-out infinite; transform-origin: bottom center; }
+
+  @keyframes bobCody  { 0%,100%{ transform: translateY(0) rotate(0deg) } 50%{ transform: translateY(-10px) rotate(-1.5deg) } }
+  @keyframes bobAstro { 0%,100%{ transform: translateY(0) rotate(0deg) } 50%{ transform: translateY(-12px) rotate(1.5deg) } }
+
+  @media (max-width: 900px) {
+    .mascot.cody, .mascot.astro { width: 110px; opacity: 0.9; top: 9vh; }
+    .cloud.c2, .cloud.c4 { display:none; }
+  }
+  @media (max-width: 560px) {
+    .mascot.cody, .mascot.astro { display: none; }
+  }
+
+  /* ======================================================================
+     FOREGROUND — label, dial, controls (above the scene)
+     ====================================================================== */
+  .stage { position: relative; z-index: 2; display: contents; }
+
+  #label {
+    position: relative; z-index: 2;
+    font-size: clamp(1.2rem, 3.5vw, 2.4rem);
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    color: var(--sf-sky);
+    text-align: center;
+    min-height: 1.2em;
+    outline: none;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    transition: color 0.3s ease;
+  }
+  #label:empty::before {
+    content: "Click to add a label";
+    color: rgba(170,203,255,0.45);
+    font-style: italic;
+    font-weight: 500;
+  }
+  #label:focus { color: #fff; }
+
+  .dial {
+    position: relative; z-index: 2;
+    width: min(66vmin, 580px);
+    height: min(66vmin, 580px);
+    filter: drop-shadow(0 18px 50px rgba(0,0,0,0.35));
+  }
+  .dial svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .dial .face { fill: rgba(3, 45, 96, 0.55); stroke: rgba(255,255,255,0.08); stroke-width: 1; }
+  .dial circle.track, .dial circle.progress { fill: none; stroke-width: 9; stroke-linecap: round; }
+  .track { stroke: var(--ring-track); }
+  .progress {
+    stroke: url(#ringGrad);
+    transition: stroke-dashoffset 0.3s linear, stroke 0.5s ease;
+  }
+  body.state-warn   .progress { stroke: var(--sf-orange); }
+  body.state-danger .progress { stroke: var(--sf-red); }
+  body.finished     .progress { stroke: var(--sf-red); }
+
+  #time {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+    font-size: clamp(3rem, 17vmin, 10.5rem);
+    letter-spacing: 0.01em;
+    color: #fff;
+    text-shadow: 0 2px 16px rgba(0,0,0,0.35);
+    transition: color 0.5s ease;
+  }
+  body.finished #time { animation: flash 1s ease-in-out infinite; }
+  @keyframes flash {
+    0%, 100% { color: var(--sf-red); }
+    50%      { color: #fff; }
+  }
+
+  /* ---- Controls ---- */
+  #controls {
+    position: relative; z-index: 2;
+    display: flex; flex-wrap: wrap;
+    align-items: center; justify-content: center;
+    gap: 0.6rem;
+    background: rgba(1, 27, 51, 0.5);
+    border: 1px solid rgba(170,203,255,0.18);
+    border-radius: 16px;
+    padding: 0.8rem 1rem;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  button, .preset {
+    font: inherit;
+    font-size: clamp(0.85rem, 1.8vw, 1.02rem);
+    font-weight: 600;
+    color: #fff;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(170,203,255,0.25);
+    border-radius: 10px;
+    padding: 0.55em 1.05em;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.08s ease, border-color 0.15s ease;
+    user-select: none;
+  }
+  button:hover, .preset:hover { background: rgba(255,255,255,0.16); border-color: var(--sf-sky); }
+  button:active, .preset:active { transform: translateY(1px); }
+
+  #startPause {
+    background: var(--sf-blue); color: #fff;
+    border-color: var(--sf-blue); min-width: 7.5em;
+    box-shadow: 0 4px 14px rgba(1,118,211,0.4);
+  }
+  #startPause:hover { background: #0a86e8; }
+  #startPause.running { background: var(--sf-orange); border-color: var(--sf-orange); box-shadow: 0 4px 14px rgba(254,147,57,0.4); }
+  #startPause.running:hover { background: #ffa456; }
+
+  .divider { width: 1px; height: 1.8em; background: rgba(170,203,255,0.25); margin: 0 0.3rem; }
+
+  #setup { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; justify-content: center; }
+  #minutes {
+    font: inherit; font-size: clamp(0.85rem, 1.8vw, 1.02rem); font-weight: 600;
+    width: 4.5em; text-align: center; color: #fff;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(170,203,255,0.25);
+    border-radius: 10px; padding: 0.55em 0.4em;
+  }
+  #minutes:focus { outline: none; border-color: var(--sf-cloud-blue); }
+  .setup-label { color: var(--sf-sky); font-size: clamp(0.8rem, 1.6vw, 1rem); font-weight: 600; }
+
+  .brandbar {
+    position: fixed; top: 1.6vh; left: 0; right: 0; z-index: 2;
+    display: flex; align-items: center; justify-content: center; gap: 0.55rem;
+    color: var(--sf-sky); font-weight: 700; letter-spacing: 0.02em;
+    font-size: clamp(0.8rem, 1.6vw, 1.05rem);
+    text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    pointer-events: none;
+  }
+  .brandbar .cloudmark { width: 1.6em; height: 1.6em; }
+
+  .hint {
+    position: fixed; bottom: 1.2vh; left: 0; right: 0; z-index: 2;
+    text-align: center; color: rgba(170,203,255,0.5); font-size: 0.8rem;
+  }
+
+  :fullscreen { background: var(--bg-bottom); }
+</style>
+</head>
+<body>
+
+  <!-- ========================= BACKGROUND SCENE ========================= -->
+  <div class="scene" aria-hidden="true">
+
+    <!-- Clouds -->
+    <svg class="cloud c1" viewBox="0 0 200 110"><path fill="#EAF5FE" d="M45 90c-22 0-40-15-40-34 0-17 14-31 32-33 6-16 22-27 40-27 20 0 37 13 42 31 2-0 3-1 5-1 16 0 29 12 29 27 0 22-19 37-43 37H45z"/></svg>
+    <svg class="cloud c2" viewBox="0 0 200 110"><path fill="#D8EDFF" d="M45 90c-22 0-40-15-40-34 0-17 14-31 32-33 6-16 22-27 40-27 20 0 37 13 42 31 2-0 3-1 5-1 16 0 29 12 29 27 0 22-19 37-43 37H45z"/></svg>
+    <svg class="cloud c3" viewBox="0 0 200 110"><path fill="#EAF5FE" d="M45 90c-22 0-40-15-40-34 0-17 14-31 32-33 6-16 22-27 40-27 20 0 37 13 42 31 2-0 3-1 5-1 16 0 29 12 29 27 0 22-19 37-43 37H45z"/></svg>
+    <svg class="cloud c4" viewBox="0 0 200 110"><path fill="#D8EDFF" d="M45 90c-22 0-40-15-40-34 0-17 14-31 32-33 6-16 22-27 40-27 20 0 37 13 42 31 2-0 3-1 5-1 16 0 29 12 29 27 0 22-19 37-43 37H45z"/></svg>
+
+    <!-- CODEY: brown bear in black Trailblazer hoodie, waving (stylized original) -->
+    <svg class="mascot cody" viewBox="0 0 300 420" xmlns="http://www.w3.org/2000/svg">
+      <!-- periwinkle backdrop blob (soft, contained) -->
+      <path d="M150 28 C232 28 262 96 256 176 C250 256 236 300 212 360 C196 400 104 400 88 360 C64 300 50 256 44 176 C38 96 68 28 150 28Z" fill="#9FA8F0" opacity="0.8"/>
+
+      <!-- legs -->
+      <path d="M118 300 q-26 60 -44 96 q-4 10 8 12 q18 2 26 -8 q14 -40 30 -78Z" fill="#6B4425"/>
+      <path d="M182 300 q26 60 44 96 q4 10 -8 12 q-18 2 -26 -8 q-14 -40 -30 -78Z" fill="#6B4425"/>
+      <!-- lower belly fur showing below hoodie -->
+      <ellipse cx="150" cy="320" rx="52" ry="40" fill="#8A5A30"/>
+
+      <!-- waving left arm (raised), brown fur + black sleeve -->
+      <g>
+        <path d="M96 210 q-40 -34 -58 -78 q-6 -16 10 -22 q16 -6 24 10 q16 38 44 60Z" fill="#111317"/>
+        <!-- paw -->
+        <circle cx="44" cy="120" r="24" fill="#6B4425"/>
+        <circle cx="36" cy="110" r="5.5" fill="#3F2714"/>
+        <circle cx="46" cy="106" r="5.5" fill="#3F2714"/>
+        <circle cx="56" cy="110" r="5.5" fill="#3F2714"/>
+        <ellipse cx="44" cy="126" rx="9" ry="7" fill="#3F2714"/>
+      </g>
+
+      <!-- right arm (down, hand behind back) -->
+      <path d="M206 210 q40 10 52 60 q4 18 -14 18 q-16 0 -22 -16 q-8 -34 -30 -44Z" fill="#111317"/>
+      <ellipse cx="236" cy="250" rx="18" ry="20" fill="#6B4425"/>
+
+      <!-- torso: black hoodie -->
+      <path d="M96 200 q54 -34 108 0 q14 60 6 118 q-60 26 -120 0 q-10 -58 6 -118Z" fill="#17191E"/>
+      <!-- hood opening / zip -->
+      <path d="M150 182 L150 312" stroke="#2A2D34" stroke-width="5"/>
+      <path d="M138 196 q12 -12 24 0 l-6 18 h-12Z" fill="#2A2D34"/>
+      <!-- drawstrings -->
+      <path d="M150 198 l-10 34 M150 198 l10 34" stroke="#E8E8E8" stroke-width="3" stroke-linecap="round"/>
+      <!-- Trailblazer script -->
+      <text x="150" y="258" text-anchor="middle" font-family="'Poppins',sans-serif" font-style="italic" font-weight="700" font-size="22" fill="#F4F4F6">Trailblazer</text>
+      <!-- little cloud badge -->
+      <ellipse cx="186" cy="288" rx="16" ry="10" fill="#00A1E0"/>
+      <!-- hoodie pocket -->
+      <rect x="112" y="276" width="76" height="30" rx="8" fill="#101216"/>
+
+      <!-- head -->
+      <!-- ears -->
+      <circle cx="104" cy="70" r="22" fill="#6B4425"/>
+      <circle cx="196" cy="70" r="22" fill="#6B4425"/>
+      <circle cx="104" cy="70" r="11" fill="#3F2714"/>
+      <circle cx="196" cy="70" r="11" fill="#3F2714"/>
+      <!-- head shape -->
+      <circle cx="150" cy="104" r="62" fill="#6B4425"/>
+      <!-- muzzle -->
+      <ellipse cx="150" cy="128" rx="38" ry="30" fill="#C98A4E"/>
+      <!-- nose -->
+      <ellipse cx="150" cy="116" rx="12" ry="9" fill="#1A1206"/>
+      <path d="M150 125 v10" stroke="#1A1206" stroke-width="4" stroke-linecap="round"/>
+      <path d="M150 135 q-9 8 -18 3 M150 135 q9 8 18 3" stroke="#1A1206" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <!-- eyes -->
+      <circle cx="126" cy="92" r="8" fill="#1A1206"/>
+      <circle cx="174" cy="92" r="8" fill="#1A1206"/>
+      <circle cx="129" cy="89" r="2.6" fill="#fff"/>
+      <circle cx="177" cy="89" r="2.6" fill="#fff"/>
+    </svg>
+
+    <!-- ASTRO: human face + raccoon hoodie onesie, striped tail, thumbs-up (stylized original) -->
+    <svg class="mascot astro" viewBox="0 0 300 420" xmlns="http://www.w3.org/2000/svg">
+      <!-- periwinkle backdrop blob (soft, contained) -->
+      <path d="M150 28 C232 28 262 96 256 176 C250 256 236 300 212 360 C196 400 104 400 88 360 C64 300 50 256 44 176 C38 96 68 28 150 28Z" fill="#9FA8F0" opacity="0.8"/>
+
+      <!-- striped bushy tail (left) -->
+      <path d="M96 300 q-60 -6 -78 54 q-8 28 14 40 q20 10 34 -10 q20 -34 48 -52Z" fill="#6B4A2E"/>
+      <path d="M40 330 q-14 18 -12 42" stroke="#C9A77E" stroke-width="10" fill="none" stroke-linecap="round" opacity="0.8"/>
+      <path d="M26 356 q-6 16 2 34" stroke="#3F2A17" stroke-width="10" fill="none" stroke-linecap="round" opacity="0.7"/>
+
+      <!-- legs (brown onesie) -->
+      <path d="M120 322 q-10 54 -12 84 q-1 12 12 12 q14 0 16 -12 q4 -44 10 -78Z" fill="#6B4A2E"/>
+      <path d="M180 322 q10 54 12 84 q1 12 -12 12 q-14 0 -16 -12 q-4 -44 -10 -78Z" fill="#6B4A2E"/>
+      <!-- feet -->
+      <ellipse cx="124" cy="412" rx="20" ry="10" fill="#5A3E26"/>
+      <ellipse cx="176" cy="412" rx="20" ry="10" fill="#5A3E26"/>
+
+      <!-- thumbs-up left arm (grey glove) -->
+      <path d="M100 236 q-34 -18 -46 -52 q-6 -16 10 -22 q15 -5 22 10 q12 30 38 42Z" fill="#17191E"/>
+      <g>
+        <ellipse cx="58" cy="166" rx="20" ry="24" fill="#B8BDC4"/>
+        <rect x="50" y="138" width="16" height="26" rx="8" fill="#B8BDC4"/>
+      </g>
+
+      <!-- right arm down (grey glove) -->
+      <path d="M200 236 q34 6 46 48 q5 16 -12 18 q-15 1 -20 -14 q-8 -30 -32 -38Z" fill="#17191E"/>
+      <ellipse cx="238" cy="296" rx="16" ry="20" fill="#B8BDC4"/>
+
+      <!-- torso: black hoodie -->
+      <path d="M100 226 q50 -30 100 0 q14 56 6 110 q-56 24 -112 0 q-8 -54 6 -110Z" fill="#17191E"/>
+      <path d="M150 210 L150 330" stroke="#2A2D34" stroke-width="5"/>
+      <path d="M150 224 l-9 30 M150 224 l9 30" stroke="#E8E8E8" stroke-width="3" stroke-linecap="round"/>
+      <text x="152" y="284" text-anchor="middle" font-family="'Poppins',sans-serif" font-style="italic" font-weight="700" font-size="21" fill="#F4F4F6">Trailblazer</text>
+      <ellipse cx="186" cy="310" rx="15" ry="9" fill="#00A1E0"/>
+
+      <!-- raccoon hood: brown with ears -->
+      <path d="M86 150 q-6 -70 64 -78 q70 8 64 78 q-10 44 -64 46 q-54 -2 -64 -46Z" fill="#7A5433"/>
+      <!-- ears -->
+      <path d="M96 78 q-6 -34 26 -40 q6 22 -4 44Z" fill="#7A5433"/>
+      <path d="M204 78 q6 -34 -26 -40 q-6 22 4 44Z" fill="#7A5433"/>
+      <path d="M104 74 q-2 -18 14 -24 q2 12 -2 24Z" fill="#C9A77E"/>
+      <path d="M196 74 q2 -18 -14 -24 q-2 12 2 24Z" fill="#C9A77E"/>
+
+      <!-- face (skin) -->
+      <path d="M108 118 q42 -14 84 0 q4 40 -8 66 q-34 20 -68 0 q-12 -26 -8 -66Z" fill="#E9C3A0"/>
+      <!-- black hair tuft -->
+      <path d="M106 120 q6 -34 44 -36 q38 2 44 36 q-14 -14 -30 -8 q-6 -14 -22 -6 q-4 -10 -16 -4 q-12 2 -20 18Z" fill="#141414"/>
+      <!-- eyes -->
+      <circle cx="130" cy="150" r="9" fill="#141414"/>
+      <circle cx="170" cy="150" r="9" fill="#141414"/>
+      <circle cx="133" cy="147" r="3" fill="#fff"/>
+      <circle cx="173" cy="147" r="3" fill="#fff"/>
+      <!-- nose + smile -->
+      <ellipse cx="150" cy="168" rx="4.5" ry="3.5" fill="#B98A63"/>
+      <path d="M134 178 q16 12 32 0" stroke="#9A6B46" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+    </svg>
+
+  </div>
+
+  <!-- ========================= FOREGROUND ========================= -->
+  <div class="brandbar">
+    <svg class="cloudmark" viewBox="0 0 200 110" aria-hidden="true"><path fill="#EAF5FE" d="M45 90c-22 0-40-15-40-34 0-17 14-31 32-33 6-16 22-27 40-27 20 0 37 13 42 31 2-0 3-1 5-1 16 0 29 12 29 27 0 22-19 37-43 37H45z"/></svg>
+    <span>Salesforce Session Timer</span>
+  </div>
+
+  <div id="label" contenteditable="true" spellcheck="false"></div>
+
+  <div class="dial">
+    <svg viewBox="0 0 220 220">
+      <defs>
+        <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%"  stop-color="#00A1E0"/>
+          <stop offset="100%" stop-color="#4FB3F0"/>
+        </linearGradient>
+      </defs>
+      <circle class="face"     cx="110" cy="110" r="95"></circle>
+      <circle class="track"    cx="110" cy="110" r="100"></circle>
+      <circle class="progress" cx="110" cy="110" r="100"></circle>
+    </svg>
+    <div id="time">10:00</div>
+  </div>
+
+  <div id="controls">
+    <div id="setup">
+      <span class="setup-label">Minutes:</span>
+      <input id="minutes" type="number" min="0" max="999" step="1" value="10">
+      <span class="preset" data-min="5">5</span>
+      <span class="preset" data-min="10">10</span>
+      <span class="preset" data-min="15">15</span>
+      <span class="preset" data-min="25">25</span>
+      <span class="preset" data-min="45">45</span>
+      <span class="preset" data-min="60">60</span>
+    </div>
+    <div class="divider"></div>
+    <button id="startPause">Start</button>
+    <button id="reset">Reset</button>
+    <button id="addMin">+1 min</button>
+    <button id="fullscreen">Fullscreen</button>
+  </div>
+
+  <div class="hint">Space = start/pause · R = reset · F = fullscreen · Click the ring to hide controls</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var CIRC = 2 * Math.PI * 100; // circumference for r=100
+
+  var els = {
+    body: document.body,
+    label: document.getElementById("label"),
+    time: document.getElementById("time"),
+    progress: document.querySelector(".progress"),
+    minutes: document.getElementById("minutes"),
+    startPause: document.getElementById("startPause"),
+    reset: document.getElementById("reset"),
+    addMin: document.getElementById("addMin"),
+    fullscreen: document.getElementById("fullscreen"),
+    controls: document.getElementById("controls")
+  };
+
+  els.progress.style.strokeDasharray = CIRC;
+  els.progress.style.strokeDashoffset = 0;
+
+  var totalMs = 10 * 60 * 1000;
+  var remainingMs = totalMs;
+  var running = false;
+  var endTime = 0;
+  var tickId = null;
+
+  function clampMinutes(v) {
+    v = parseFloat(v);
+    if (isNaN(v) || v < 0) v = 0;
+    if (v > 999) v = 999;
+    return v;
+  }
+
+  function fmt(ms) {
+    if (ms < 0) ms = 0;
+    var totalSec = Math.ceil(ms / 1000);
+    var h = Math.floor(totalSec / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    function pad(n) { return n < 10 ? "0" + n : "" + n; }
+    if (h > 0) return h + ":" + pad(m) + ":" + pad(s);
+    return pad(m) + ":" + pad(s);
+  }
+
+  function render() {
+    els.time.textContent = fmt(remainingMs);
+
+    var frac = totalMs > 0 ? remainingMs / totalMs : 0;
+    if (frac < 0) frac = 0;
+    if (frac > 1) frac = 1;
+    els.progress.style.strokeDashoffset = CIRC * (1 - frac);
+
+    els.body.classList.remove("state-warn", "state-danger", "finished");
+    if (remainingMs <= 0) {
+      els.body.classList.add("finished");
+    } else if (remainingMs <= 30 * 1000) {
+      els.body.classList.add("state-danger");
+    } else if (remainingMs <= 60 * 1000) {
+      els.body.classList.add("state-warn");
+    }
+
+    document.title = (remainingMs <= 0 ? "Time's up! " : fmt(remainingMs) + " ") +
+                     "· Salesforce Session Timer";
+  }
+
+  function tick() {
+    remainingMs = endTime - Date.now();
+    if (remainingMs <= 0) {
+      remainingMs = 0;
+      stop();
+      render();
+      notifyDone();
+      return;
+    }
+    render();
+  }
+
+  function start() {
+    if (running) return;
+    if (remainingMs <= 0) remainingMs = totalMs;
+    running = true;
+    endTime = Date.now() + remainingMs;
+    els.startPause.textContent = "Pause";
+    els.startPause.classList.add("running");
+    tickId = setInterval(tick, 200);
+    render();
+  }
+
+  function pause() {
+    if (!running) return;
+    running = false;
+    remainingMs = endTime - Date.now();
+    if (remainingMs < 0) remainingMs = 0;
+    clearInterval(tickId);
+    els.startPause.textContent = "Resume";
+    els.startPause.classList.remove("running");
+    render();
+  }
+
+  function stop() {
+    running = false;
+    clearInterval(tickId);
+    els.startPause.textContent = "Start";
+    els.startPause.classList.remove("running");
+  }
+
+  function reset() {
+    stop();
+    totalMs = clampMinutes(els.minutes.value) * 60 * 1000;
+    remainingMs = totalMs;
+    render();
+  }
+
+  function toggleStartPause() {
+    if (running) pause();
+    else start();
+  }
+
+  function notifyDone() {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      var ctx = new Ctx();
+      var now = ctx.currentTime;
+      [0, 0.5, 1.0].forEach(function (t) {
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.frequency.value = 880;
+        osc.type = "sine";
+        gain.gain.setValueAtTime(0.0001, now + t);
+        gain.gain.exponentialRampToValueAtTime(0.25, now + t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.4);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(now + t);
+        osc.stop(now + t + 0.45);
+      });
+    } catch (e) {}
+  }
+
+  els.startPause.addEventListener("click", toggleStartPause);
+  els.reset.addEventListener("click", reset);
+
+  els.addMin.addEventListener("click", function () {
+    remainingMs += 60 * 1000;
+    totalMs = Math.max(totalMs, remainingMs);
+    if (running) endTime = Date.now() + remainingMs;
+    render();
+  });
+
+  els.minutes.addEventListener("change", function () {
+    els.minutes.value = clampMinutes(els.minutes.value);
+    if (!running) reset();
+  });
+  els.minutes.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { els.minutes.blur(); if (!running) reset(); }
+  });
+
+  var presets = document.querySelectorAll(".preset");
+  for (var i = 0; i < presets.length; i++) {
+    presets[i].addEventListener("click", function () {
+      els.minutes.value = this.getAttribute("data-min");
+      reset();
+    });
+  }
+
+  els.fullscreen.addEventListener("click", toggleFullscreen);
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      (document.documentElement.requestFullscreen ||
+       document.documentElement.webkitRequestFullscreen).call(document.documentElement);
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    }
+  }
+
+  document.querySelector(".dial").addEventListener("click", function () {
+    els.controls.style.display = els.controls.style.display === "none" ? "" : "none";
+  });
+
+  document.addEventListener("keydown", function (e) {
+    var tag = document.activeElement;
+    if (tag === els.minutes || tag === els.label) return;
+
+    if (e.code === "Space") { e.preventDefault(); toggleStartPause(); }
+    else if (e.key === "r" || e.key === "R") { reset(); }
+    else if (e.key === "f" || e.key === "F") { toggleFullscreen(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); els.minutes.value = clampMinutes(+els.minutes.value + 1); if (!running) reset(); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); els.minutes.value = clampMinutes(+els.minutes.value - 1); if (!running) reset(); }
+  });
+
+  try {
+    var saved = localStorage.getItem("timerLabel");
+    if (saved) els.label.textContent = saved;
+  } catch (e) {}
+  els.label.addEventListener("input", function () {
+    try { localStorage.setItem("timerLabel", els.label.textContent); } catch (e) {}
+  });
+  els.label.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); els.label.blur(); }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

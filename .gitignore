@@ -1,0 +1,7 @@
+# Reference artwork — not used by the page (mascots are inline SVG) and
+# these are copyrighted Salesforce assets, so keep them out of the public repo.
+cody.png
+astro.jpeg
+
+# OS cruft
+.DS_Store
