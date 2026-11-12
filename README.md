@@ -5,8 +5,11 @@ students while screen-sharing during online sessions.
 
 ## Use it
 
-Open [`timer.html`](timer.html) in any modern browser — no install, no server,
-works offline. Click **Fullscreen** for a clean presenting view.
+**Live:** https://vincent-lowe.github.io/session-timer/current/
+
+Or open [`current/index.html`](current/index.html) in any modern browser — no
+install, no server, works offline. Click **Fullscreen** for a clean presenting
+view. (The old `timer.html` path now redirects to `current/`.)
 
 ### Features
 - Large countdown ring + tabular digits, readable across a shared screen
@@ -25,7 +28,7 @@ This is a static page, so it can be served directly by GitHub Pages:
 2. In the repo on GitHub: **Settings → Pages → Build and deployment**,
    set **Source: Deploy from a branch**, branch **main** / **`/ (root)`**, Save.
 3. After a minute the site is live at
-   `https://<username>.github.io/<repo-name>/timer.html`.
+   `https://<username>.github.io/<repo-name>/current/`.
 
 ## Notes
 - The end-of-timer chime needs one click on the page first (browser autoplay policy).
